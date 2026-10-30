@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+from urllib.parse import urlsplit
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -21,6 +22,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger("skinparserbot")
 
+def _mask_proxy(url: str) -> str:
+    try:
+        parts = urlsplit(url)
+        if parts.username and parts.password:
+            return url.replace(f":{parts.password}@", ":***@")
+        return url
+    except Exception:
+        return "configured"
+
 async def main():
     logger.info("Инициализация базы данных...")
     await init_db()
@@ -34,8 +44,16 @@ async def main():
 
     session = None
     if settings.PROXY_URL:
-        logger.info(f"Используется прокси для Telegram API: {settings.PROXY_URL}")
-        session = AiohttpSession(proxy=settings.PROXY_URL)
+        # Автоматическая коррекция формата socks5://user:pass:ip:port -> socks5://user:pass@ip:port если пользователь опечатался
+        proxy_url = settings.PROXY_URL.strip()
+        parts = proxy_url.split(":")
+        if len(parts) == 5 and "@" not in proxy_url:
+            # format scheme://user:pass:ip:port
+            scheme_and_user = f"{parts[0]}:{parts[1]}"
+            proxy_url = f"{scheme_and_user}:{parts[2]}@{parts[3]}:{parts[4]}"
+
+        logger.info(f"Используется прокси для Telegram API: {_mask_proxy(proxy_url)}")
+        session = AiohttpSession(proxy=proxy_url)
 
     bot = Bot(
         token=settings.BOT_TOKEN,
