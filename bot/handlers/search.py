@@ -10,7 +10,8 @@ from bot.keyboards.search import (
     get_offers_list_kb,
     get_offer_detail_kb
 )
-from bot.services.mock_data import get_mock_skin_offers, QUALITIES
+from bot.services.market_service import get_live_skin_offers
+from bot.services.mock_data import QUALITIES
 
 router = Router(name="search")
 
@@ -70,7 +71,7 @@ async def process_quality_choice(callback: CallbackQuery, state: FSMContext):
     st_prefix = "StatTrak™ " if is_stattrak else ""
     quality_name = QUALITIES.get(quality_code, quality_code)
     
-    offers = await get_mock_skin_offers(skin_name, is_stattrak, quality_code)
+    offers = await get_live_skin_offers(skin_name, is_stattrak, quality_code)
     
     await state.update_data(
         quality=quality_code,

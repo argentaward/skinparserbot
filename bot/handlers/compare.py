@@ -10,7 +10,8 @@ from bot.keyboards.compare import (
     get_recipient_markets_kb,
     get_compare_result_kb
 )
-from bot.services.mock_data import get_mock_comparison, QUALITIES
+from bot.services.market_service import get_live_comparison
+from bot.services.mock_data import QUALITIES
 from bot.services.calculator import calculate_arbitrage
 from bot.database.db import get_or_create_user, add_deal
 
@@ -103,7 +104,7 @@ async def process_recipient_market(callback: CallbackQuery, state: FSMContext):
     sale_fee = user.get("sale_fee", 5.0)
     withdraw_fee = user.get("withdraw_fee", 3.0)
 
-    donor_meta, donor_offer, recip_meta, recip_offer = await get_mock_comparison(
+    donor_meta, donor_offer, recip_meta, recip_offer = await get_live_comparison(
         skin_name=skin_name,
         is_stattrak=is_stattrak,
         quality=quality_code,

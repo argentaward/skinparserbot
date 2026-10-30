@@ -10,8 +10,9 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from config import settings
-from bot.database.db import init_db
+from bot.database.db import init_db, get_total_prices_count
 from bot.handlers import common, search, compare, profile
+from bot.services.market_service import update_market_csgo_prices
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,10 +40,27 @@ def _sanitize_token(raw_token: str) -> str:
         token = token[len("BOT_TOKEN="):].strip().strip("'\"")
     return token
 
+async def background_prices_updater():
+    """
+    Фоновый цикл обновления прайс-листов каждые 10 минут
+    """
+    while True:
+        try:
+            logger.info("Фоновое обновление котировок маркетов...")
+            await update_market_csgo_prices()
+        except Exception as e:
+            logger.error(f"Ошибка при фоновом обновлении котировок: {e}")
+        # Ждем 10 минут перед следующим обновлением
+        await asyncio.sleep(600)
+
 async def main():
     logger.info("Инициализация базы данных...")
     await init_db()
     logger.info("База данных готова.")
+
+    # Проверка наличия закэшированных цен
+    cached_count = await get_total_prices_count("Market.CSGO")
+    logger.info(f"В локальной базе сохранено котировок: {cached_count}")
 
     token = _sanitize_token(settings.BOT_TOKEN)
 
@@ -75,6 +93,9 @@ async def main():
     dp.include_router(search.router)
     dp.include_router(compare.router)
     dp.include_router(profile.router)
+
+    # Запуск фонового сборщика цен
+    asyncio.create_task(background_prices_updater())
 
     logger.info("Запуск бота в режиме Polling...")
     try:
