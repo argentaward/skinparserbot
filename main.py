@@ -5,6 +5,7 @@ import sys
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
 from config import settings
@@ -31,8 +32,14 @@ async def main():
             "Пожалуйста, создайте файл .env и укажите ваш BOT_TOKEN=..."
         )
 
+    session = None
+    if settings.PROXY_URL:
+        logger.info(f"Используется прокси для Telegram API: {settings.PROXY_URL}")
+        session = AiohttpSession(proxy=settings.PROXY_URL)
+
     bot = Bot(
         token=settings.BOT_TOKEN,
+        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
     dp = Dispatcher(storage=MemoryStorage())
@@ -45,7 +52,6 @@ async def main():
 
     logger.info("Запуск бота в режиме Polling...")
     try:
-        # Удаляем вебхук при наличии и запускаем опрос
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(bot)
     finally:
