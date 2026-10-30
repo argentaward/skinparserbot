@@ -31,24 +31,32 @@ def _mask_proxy(url: str) -> str:
     except Exception:
         return "configured"
 
+def _sanitize_token(raw_token: str) -> str:
+    if not raw_token:
+        return ""
+    token = raw_token.strip().strip("'\"")
+    if token.startswith("BOT_TOKEN="):
+        token = token[len("BOT_TOKEN="):].strip().strip("'\"")
+    return token
+
 async def main():
     logger.info("Инициализация базы данных...")
     await init_db()
     logger.info("База данных готова.")
 
-    if not settings.BOT_TOKEN or settings.BOT_TOKEN == "YOUR_BOT_TOKEN_HERE" or settings.BOT_TOKEN == "DUMMY_TOKEN":
+    token = _sanitize_token(settings.BOT_TOKEN)
+
+    if not token or token in ("YOUR_BOT_TOKEN_HERE", "DUMMY_TOKEN"):
         logger.warning(
             "⚠️ ВНИМАНИЕ: BOT_TOKEN не задан или содержит заглушку! "
-            "Пожалуйста, создайте файл .env и укажите ваш BOT_TOKEN=..."
+            "Пожалуйста, укажите валидный BOT_TOKEN в переменных окружения."
         )
 
     session = None
     if settings.PROXY_URL:
-        # Автоматическая коррекция формата socks5://user:pass:ip:port -> socks5://user:pass@ip:port если пользователь опечатался
         proxy_url = settings.PROXY_URL.strip()
         parts = proxy_url.split(":")
         if len(parts) == 5 and "@" not in proxy_url:
-            # format scheme://user:pass:ip:port
             scheme_and_user = f"{parts[0]}:{parts[1]}"
             proxy_url = f"{scheme_and_user}:{parts[2]}@{parts[3]}:{parts[4]}"
 
@@ -56,7 +64,7 @@ async def main():
         session = AiohttpSession(proxy=proxy_url)
 
     bot = Bot(
-        token=settings.BOT_TOKEN,
+        token=token,
         session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
