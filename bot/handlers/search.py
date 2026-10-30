@@ -19,7 +19,7 @@ router = Router(name="search")
 async def start_skin_search(callback: CallbackQuery, state: FSMContext):
     await state.set_state(SearchSkinStates.waiting_for_name)
     await callback.message.edit_text(
-        "<b>Поиск скина</b>\n\n"
+        "🔍 <b>Поиск скина</b>\n\n"
         "Введите название скина (например: AK-47 | Redline или AWP | Asiimov):",
         parse_mode="HTML",
         reply_markup=get_cancel_kb()
@@ -80,7 +80,7 @@ async def process_quality_choice(callback: CallbackQuery, state: FSMContext):
     await state.set_state(SearchSkinStates.viewing_results)
 
     text = (
-        f"<b>Результаты поиска:</b>\n"
+        f"🔍 <b>Результаты поиска:</b>\n"
         f"{st_prefix}{skin_name} ({quality_name})\n\n"
         f"Цены по возрастанию. Выберите вариант для деталей:"
     )
@@ -111,7 +111,8 @@ async def view_offer_detail(callback: CallbackQuery, state: FSMContext):
     discount_text = f"-{int(offer['discount_percent'])}%" if offer['discount_percent'] > 0 else "Нет скидки"
 
     detail_text = (
-        f"<b>{st_prefix}{data['skin_name']}</b>\n"
+        f"📦 <b>Детали предложения</b>\n\n"
+        f"Предмет: <b>{st_prefix}{data['skin_name']}</b>\n"
         f"Качество: {quality_name}\n"
         f"Площадка: {offer['market_name']}\n"
         f"Цена: <b>{offer['price']:.2f} ₽</b>\n"
@@ -139,7 +140,7 @@ async def back_to_offers_list(callback: CallbackQuery, state: FSMContext):
     quality_name = QUALITIES.get(quality_code, quality_code)
 
     text = (
-        f"<b>Результаты поиска:</b>\n"
+        f"🔍 <b>Результаты поиска:</b>\n"
         f"{st_prefix}{data['skin_name']} ({quality_name})\n\n"
         f"Цены по возрастанию. Выберите вариант для деталей:"
     )

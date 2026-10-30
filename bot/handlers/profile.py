@@ -20,15 +20,15 @@ async def show_profile(callback: CallbackQuery, state: FSMContext):
     profit_sign = "+" if total_profit >= 0 else ""
 
     text = (
-        f"<b>Личный кабинет</b>\n\n"
-        f"ID: {user['user_id']}\n"
+        f"👤 <b>Личный кабинет</b>\n\n"
+        f"ID: <code>{user['user_id']}</code>\n"
         f"Пользователь: @{user['username'] or 'не указан'}\n\n"
-        f"<b>Комиссии:</b>\n"
+        f"⚙️ <b>Комиссии:</b>\n"
         f"• Пополнение: {user['deposit_fee']}%\n"
         f"• Продажа: {user['sale_fee']}%\n"
         f"• Вывод: {user['withdraw_fee']}%\n\n"
-        f"<b>Статистика:</b>\n"
-        f"• Сделок: {total_deals}\n"
+        f"📈 <b>Статистика:</b>\n"
+        f"• Сделок проведено: <b>{total_deals}</b>\n"
         f"• Общий профит: <b>{profit_sign}{total_profit:.2f} ₽</b>\n"
     )
 
@@ -42,7 +42,7 @@ async def show_profile(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "profile_edit_fees")
 async def edit_fees_menu(callback: CallbackQuery):
     await callback.message.edit_text(
-        "<b>Настройка комиссий</b>\n\n"
+        "⚙️ <b>Настройка комиссий</b>\n\n"
         "Выберите комиссию для изменения:",
         parse_mode="HTML",
         reply_markup=get_fees_edit_kb()
@@ -92,7 +92,7 @@ async def save_dep_fee(message: Message, state: FSMContext):
     user = await get_or_create_user(message.from_user.id, message.from_user.username)
     await update_user_fees(message.from_user.id, val, user["sale_fee"], user["withdraw_fee"])
     await state.clear()
-    await message.answer(f"Комиссия пополнения обновлена: <b>{val}%</b>", parse_mode="HTML", reply_markup=get_profile_kb())
+    await message.answer(f"✅ Комиссия пополнения обновлена: <b>{val}%</b>", parse_mode="HTML", reply_markup=get_profile_kb())
 
 @router.message(ProfileStates.waiting_for_sale_fee)
 async def save_sale_fee(message: Message, state: FSMContext):
@@ -107,7 +107,7 @@ async def save_sale_fee(message: Message, state: FSMContext):
     user = await get_or_create_user(message.from_user.id, message.from_user.username)
     await update_user_fees(message.from_user.id, user["deposit_fee"], val, user["withdraw_fee"])
     await state.clear()
-    await message.answer(f"Комиссия маркета обновлена: <b>{val}%</b>", parse_mode="HTML", reply_markup=get_profile_kb())
+    await message.answer(f"✅ Комиссия маркета обновлена: <b>{val}%</b>", parse_mode="HTML", reply_markup=get_profile_kb())
 
 @router.message(ProfileStates.waiting_for_withdraw_fee)
 async def save_with_fee(message: Message, state: FSMContext):
@@ -122,7 +122,7 @@ async def save_with_fee(message: Message, state: FSMContext):
     user = await get_or_create_user(message.from_user.id, message.from_user.username)
     await update_user_fees(message.from_user.id, user["deposit_fee"], user["sale_fee"], val)
     await state.clear()
-    await message.answer(f"Комиссия вывода обновлена: <b>{val}%</b>", parse_mode="HTML", reply_markup=get_profile_kb())
+    await message.answer(f"✅ Комиссия вывода обновлена: <b>{val}%</b>", parse_mode="HTML", reply_markup=get_profile_kb())
 
 @router.callback_query(F.data == "profile_deals_history")
 async def show_deals_history(callback: CallbackQuery):
@@ -130,7 +130,7 @@ async def show_deals_history(callback: CallbackQuery):
 
     if not deals:
         await callback.message.edit_text(
-            "<b>Журнал сделок пуст.</b>\n\n"
+            "📜 <b>Журнал сделок пуст.</b>\n\n"
             "После проведения и сравнения кругов нажимайте «Круг проведен», чтобы сохранять их сюда.",
             parse_mode="HTML",
             reply_markup=get_profile_kb()
@@ -138,7 +138,7 @@ async def show_deals_history(callback: CallbackQuery):
         await callback.answer()
         return
 
-    lines = ["<b>Последние сделки:</b>\n"]
+    lines = ["📜 <b>Последние сделки:</b>\n"]
     for i, d in enumerate(deals, start=1):
         sign = "+" if d["net_profit"] >= 0 else ""
         lines.append(

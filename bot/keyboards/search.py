@@ -5,10 +5,10 @@ from bot.services.mock_data import MarketOffer
 def get_stattrak_kb(prefix: str = "search") -> InlineKeyboardMarkup:
     keyboard = [
         [
-            InlineKeyboardButton(text="Обычный", callback_data=f"{prefix}_st_0"),
-            InlineKeyboardButton(text="StatTrak™", callback_data=f"{prefix}_st_1")
+            InlineKeyboardButton(text="🔹 Обычный", callback_data=f"{prefix}_st_0"),
+            InlineKeyboardButton(text="🔸 StatTrak™", callback_data=f"{prefix}_st_1")
         ],
-        [InlineKeyboardButton(text="Отмена", callback_data="menu_cancel")]
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="menu_cancel")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -25,7 +25,7 @@ def get_quality_kb(prefix: str = "search") -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(text="BS (Закаленное в боях)", callback_data=f"{prefix}_q_BS")
         ],
-        [InlineKeyboardButton(text="Отмена", callback_data="menu_cancel")]
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="menu_cancel")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -39,15 +39,15 @@ def get_offers_list_kb(offers: List[MarketOffer]) -> InlineKeyboardMarkup:
         ])
     
     keyboard.append([
-        InlineKeyboardButton(text="Искать другой скин", callback_data="menu_search"),
-        InlineKeyboardButton(text="Главное меню", callback_data="menu_cancel")
+        InlineKeyboardButton(text="🔄 Другой скин", callback_data="menu_search"),
+        InlineKeyboardButton(text="🏠 Главное меню", callback_data="menu_cancel")
     ])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_offer_detail_kb(offer_url: str) -> InlineKeyboardMarkup:
     keyboard = [
-        [InlineKeyboardButton(text="Перейти на маркет", url=offer_url)],
-        [InlineKeyboardButton(text="Назад к списку", callback_data="offer_back_list")],
-        [InlineKeyboardButton(text="Главное меню", callback_data="menu_cancel")]
+        [InlineKeyboardButton(text="🔗 Перейти на маркет", url=offer_url)],
+        [InlineKeyboardButton(text="⬅️ Назад к списку", callback_data="offer_back_list")],
+        [InlineKeyboardButton(text="🏠 Главное меню", callback_data="menu_cancel")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
