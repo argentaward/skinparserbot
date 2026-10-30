@@ -18,8 +18,8 @@ router = Router(name="search")
 async def start_skin_search(callback: CallbackQuery, state: FSMContext):
     await state.set_state(SearchSkinStates.waiting_for_name)
     await callback.message.edit_text(
-        "🔍 <b>Поиск скина</b>\n\n"
-        "Введите название скина (например: <code>AK-47 | Redline</code> или <code>AWP | Asiimov</code>):",
+        "<b>Поиск скина</b>\n\n"
+        "Введите название скина (например: AK-47 | Redline или AWP | Asiimov):",
         parse_mode="HTML",
         reply_markup=get_cancel_kb()
     )
@@ -29,14 +29,14 @@ async def start_skin_search(callback: CallbackQuery, state: FSMContext):
 async def process_skin_name(message: Message, state: FSMContext):
     skin_name = message.text.strip()
     if len(skin_name) < 2:
-        await message.answer("⚠️ Название скина слишком короткое. Попробуйте еще раз:")
+        await message.answer("Название скина слишком короткое. Попробуйте еще раз:")
         return
 
     await state.update_data(skin_name=skin_name)
     await state.set_state(SearchSkinStates.waiting_for_stattrak)
     
     await message.answer(
-        f"🎯 Скин: <b>{skin_name}</b>\n\n"
+        f"Скин: <b>{skin_name}</b>\n\n"
         "Выберите тип предмета:",
         parse_mode="HTML",
         reply_markup=get_stattrak_kb(prefix="search")
@@ -53,7 +53,7 @@ async def process_stattrak_choice(callback: CallbackQuery, state: FSMContext):
     full_name = f"{st_prefix}{data['skin_name']}"
 
     await callback.message.edit_text(
-        f"🎯 Скин: <b>{full_name}</b>\n\n"
+        f"Скин: <b>{full_name}</b>\n\n"
         "Выберите качество предмета:",
         parse_mode="HTML",
         reply_markup=get_quality_kb(prefix="search")
@@ -70,10 +70,8 @@ async def process_quality_choice(callback: CallbackQuery, state: FSMContext):
     st_prefix = "StatTrak™ " if is_stattrak else ""
     quality_name = QUALITIES.get(quality_code, quality_code)
     
-    # Загрузка мок-предложений
     offers = await get_mock_skin_offers(skin_name, is_stattrak, quality_code)
     
-    # Сохраняем в FSM для детального просмотра
     await state.update_data(
         quality=quality_code,
         offers=[offer.__dict__ for offer in offers]
@@ -81,10 +79,9 @@ async def process_quality_choice(callback: CallbackQuery, state: FSMContext):
     await state.set_state(SearchSkinStates.viewing_results)
 
     text = (
-        f"📊 <b>Результаты поиска скина:</b>\n"
-        f"🔫 <b>{st_prefix}{skin_name}</b>\n"
-        f"⭐ Качество: <i>{quality_name}</i>\n\n"
-        f"<i>Предложения отсортированы от самых дешёвых к дорогим. Нажмите на вариант для подробностей:</i>"
+        f"<b>Результаты поиска:</b>\n"
+        f"{st_prefix}{skin_name} ({quality_name})\n\n"
+        f"Цены по возрастанию. Выберите вариант для деталей:"
     )
 
     await callback.message.edit_text(
@@ -101,7 +98,7 @@ async def view_offer_detail(callback: CallbackQuery, state: FSMContext):
     offers = data.get("offers", [])
     
     if offer_idx >= len(offers):
-        await callback.answer("Ошибка: предложение не найдено", show_alert=True)
+        await callback.answer("Предложение не найдено", show_alert=True)
         return
 
     offer = offers[offer_idx]
@@ -109,17 +106,16 @@ async def view_offer_detail(callback: CallbackQuery, state: FSMContext):
     quality_code = data.get("quality", "")
     quality_name = QUALITIES.get(quality_code, quality_code)
 
-    lock_text = f"⏳ {offer['trade_lock_days']} дн." if offer['trade_lock_days'] > 0 else "⚡ Без задержки (Trade Ready)"
-    discount_text = f"🔥 -{int(offer['discount_percent'])}%" if offer['discount_percent'] > 0 else "Нет скидки"
+    lock_text = f"{offer['trade_lock_days']} дн." if offer['trade_lock_days'] > 0 else "Без задержки (Trade Ready)"
+    discount_text = f"-{int(offer['discount_percent'])}%" if offer['discount_percent'] > 0 else "Нет скидки"
 
     detail_text = (
-        f"📦 <b>Детали предложения</b>\n\n"
-        f"🔫 <b>Предмет:</b> {st_prefix}{data['skin_name']}\n"
-        f"⭐ <b>Качество:</b> {quality_name}\n"
-        f"🏪 <b>Площадка:</b> {offer['market_name']}\n"
-        f"💰 <b>Цена:</b> <code>{offer['price']:.2f} ₽</code>\n"
-        f"🏷 <b>Скидка маркетплейса:</b> {discount_text}\n"
-        f"⏱ <b>Trade Lock:</b> {lock_text}\n"
+        f"<b>{st_prefix}{data['skin_name']}</b>\n"
+        f"Качество: {quality_name}\n"
+        f"Площадка: {offer['market_name']}\n"
+        f"Цена: <b>{offer['price']:.2f} ₽</b>\n"
+        f"Скидка маркета: {discount_text}\n"
+        f"Trade Lock: {lock_text}\n"
     )
 
     await callback.message.edit_text(
@@ -142,10 +138,9 @@ async def back_to_offers_list(callback: CallbackQuery, state: FSMContext):
     quality_name = QUALITIES.get(quality_code, quality_code)
 
     text = (
-        f"📊 <b>Результаты поиска скина:</b>\n"
-        f"🔫 <b>{st_prefix}{data['skin_name']}</b>\n"
-        f"⭐ Качество: <i>{quality_name}</i>\n\n"
-        f"<i>Предложения отсортированы от самых дешёвых к дорогим:</i>"
+        f"<b>Результаты поиска:</b>\n"
+        f"{st_prefix}{data['skin_name']} ({quality_name})\n\n"
+        f"Цены по возрастанию. Выберите вариант для деталей:"
     )
 
     await callback.message.edit_text(

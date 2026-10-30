@@ -20,8 +20,8 @@ router = Router(name="compare")
 async def start_compare(callback: CallbackQuery, state: FSMContext):
     await state.set_state(CompareMarketsStates.waiting_for_name)
     await callback.message.edit_text(
-        "🔄 <b>Сравнение 2 маркетов</b>\n\n"
-        "Введите название скина для арбитража (например: <code>M4A4 | The Emperor</code>):",
+        "<b>Сравнение 2 маркетов</b>\n\n"
+        "Введите название скина (например: M4A4 | The Emperor):",
         parse_mode="HTML",
         reply_markup=get_cancel_kb()
     )
@@ -31,14 +31,14 @@ async def start_compare(callback: CallbackQuery, state: FSMContext):
 async def process_compare_skin_name(message: Message, state: FSMContext):
     skin_name = message.text.strip()
     if len(skin_name) < 2:
-        await message.answer("⚠️ Название скина слишком короткое. Введите еще раз:")
+        await message.answer("Название скина слишком короткое. Введите еще раз:")
         return
 
     await state.update_data(skin_name=skin_name)
     await state.set_state(CompareMarketsStates.waiting_for_stattrak)
 
     await message.answer(
-        f"🎯 Скин: <b>{skin_name}</b>\n\n"
+        f"Скин: <b>{skin_name}</b>\n\n"
         "Выберите тип предмета:",
         parse_mode="HTML",
         reply_markup=get_stattrak_kb(prefix="compare")
@@ -55,7 +55,7 @@ async def process_compare_stattrak(callback: CallbackQuery, state: FSMContext):
     full_name = f"{st_prefix}{data['skin_name']}"
 
     await callback.message.edit_text(
-        f"🎯 Скин: <b>{full_name}</b>\n\n"
+        f"Скин: <b>{full_name}</b>\n\n"
         "Выберите качество предмета:",
         parse_mode="HTML",
         reply_markup=get_quality_kb(prefix="compare")
@@ -69,7 +69,7 @@ async def process_compare_quality(callback: CallbackQuery, state: FSMContext):
     await state.set_state(CompareMarketsStates.waiting_for_donor)
 
     await callback.message.edit_text(
-        "🛒 <b>Выберите Маркет-донор (где покупаем):</b>",
+        "Выберите маркет-донор (где покупаем):",
         parse_mode="HTML",
         reply_markup=get_donor_markets_kb()
     )
@@ -82,7 +82,7 @@ async def process_donor_market(callback: CallbackQuery, state: FSMContext):
     await state.set_state(CompareMarketsStates.waiting_for_recipient)
 
     await callback.message.edit_text(
-        "🏷 <b>Выберите Маркет-реципиент (где продаем):</b>",
+        "Выберите маркет-реципиент (где продаем):",
         parse_mode="HTML",
         reply_markup=get_recipient_markets_kb(excluded_id=donor_id)
     )
@@ -98,7 +98,6 @@ async def process_recipient_market(callback: CallbackQuery, state: FSMContext):
     quality_code = data["quality"]
     donor_id = data["donor_id"]
 
-    # Данные пользователя по комиссиям
     user = await get_or_create_user(callback.from_user.id, callback.from_user.username)
     deposit_fee = user.get("deposit_fee", 0.0)
     sale_fee = user.get("sale_fee", 5.0)
@@ -112,7 +111,6 @@ async def process_recipient_market(callback: CallbackQuery, state: FSMContext):
         recipient_id=recipient_id
     )
 
-    # Расчет экономики
     calc = calculate_arbitrage(
         buy_price=donor_offer.price,
         sell_price=recip_offer.price,
@@ -121,7 +119,6 @@ async def process_recipient_market(callback: CallbackQuery, state: FSMContext):
         withdraw_fee_percent=withdraw_fee
     )
 
-    # Сохраняем расчет для возможной записи сделки
     await state.update_data(
         last_calc={
             "skin_name": f"{'StatTrak™ ' if is_stattrak else ''}{skin_name} ({quality_code})",
@@ -140,20 +137,16 @@ async def process_recipient_market(callback: CallbackQuery, state: FSMContext):
     profit_sign = "+" if calc.net_profit >= 0 else ""
 
     text = (
-        f"📊 <b>Результат арбитражного сравнения:</b>\n\n"
-        f"🔫 <b>Предмет:</b> {st_prefix}{skin_name}\n"
-        f"⭐ <b>Качество:</b> {quality_name}\n\n"
-        f"🛒 <b>Донор:</b> {donor_meta['name']}\n"
-        f"   • Цена покупки: <code>{calc.buy_price:.2f} ₽</code>\n"
-        f"   • С учетом пополнения (+{deposit_fee}%): <code>{calc.real_cost:.2f} ₽</code>\n\n"
-        f"🏷 <b>Реципиент:</b> {recip_meta['name']}\n"
-        f"   • Цена продажи: <code>{calc.sell_price:.2f} ₽</code>\n"
-        f"   • Комиссия продажи: {sale_fee}%\n"
-        f"   • Комиссия вывода: {withdraw_fee}%\n"
-        f"   • Чистыми на руки: <code>{calc.net_payout:.2f} ₽</code>\n\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"{profit_emoji} <b>Чистый профит:</b> <code>{profit_sign}{calc.net_profit:.2f} ₽</code>\n"
-        f"📈 <b>Чистый ROI:</b> <code>{profit_sign}{calc.roi:.2f}%</code>\n"
+        f"<b>Результат сравнения:</b>\n"
+        f"{st_prefix}{skin_name} ({quality_name})\n\n"
+        f"Покупка ({donor_meta['name']}): {calc.buy_price:.2f} ₽\n"
+        f"С учетом ввода (+{deposit_fee}%): {calc.real_cost:.2f} ₽\n\n"
+        f"Продажа ({recip_meta['name']}): {calc.sell_price:.2f} ₽\n"
+        f"Комиссия продажи: {sale_fee}%, вывода: {withdraw_fee}%\n"
+        f"На руки: {calc.net_payout:.2f} ₽\n\n"
+        f"────────────────────\n"
+        f"{profit_emoji} Чистый профит: <b>{profit_sign}{calc.net_profit:.2f} ₽</b>\n"
+        f"ROI: <b>{profit_sign}{calc.roi:.2f}%</b>\n"
     )
 
     await callback.message.edit_text(
@@ -186,4 +179,4 @@ async def process_deal_save(callback: CallbackQuery, state: FSMContext):
         roi=last_calc["roi"]
     )
 
-    await callback.answer("✅ Круг успешно зафиксирован в журнале сделок!", show_alert=True)
+    await callback.answer("Круг сохранен в журнал сделок!", show_alert=True)
