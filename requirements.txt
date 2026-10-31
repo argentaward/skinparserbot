@@ -5,3 +5,4 @@ python-dotenv>=1.0.0
 aiohttp-socks>=0.8.0
 brotli>=1.1.0
 requests>=2.31.0
+cryptography>=42.0.0

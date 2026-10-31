@@ -17,3 +17,5 @@ class ProfileStates(StatesGroup):
     waiting_for_deposit_fee = State()
     waiting_for_sale_fee = State()
     waiting_for_withdraw_fee = State()
+    waiting_for_cstm_key = State()
+    waiting_for_lis_key = State()
