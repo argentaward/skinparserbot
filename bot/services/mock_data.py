@@ -1,6 +1,7 @@
 import random
 from dataclasses import dataclass
 from typing import List, Optional
+from urllib.parse import quote
 
 @dataclass
 class MarketOffer:
@@ -26,18 +27,26 @@ QUALITIES = {
     "BS": "Закаленное в боях (Battle-Scarred)",
 }
 
+def get_real_market_url(market_id: str, query: str) -> str:
+    encoded = quote(query)
+    if "market_csgo" in market_id:
+        return f"https://market.csgo.com/ru/?search={encoded}"
+    elif "lis_skins" in market_id:
+        return f"https://lis-skins.ru/market/csgo/?query={encoded}"
+    elif "csmoney" in market_id:
+        return f"https://cs.money/csgo/trade/?search={encoded}"
+    elif "steam" in market_id:
+        return f"https://steamcommunity.com/market/search?appid=730&q={encoded}"
+    elif "buff163" in market_id:
+        return f"https://buff.163.com/market/csgo#tab=selling&page_num=1&search={encoded}"
+    return f"https://market.csgo.com/ru/?search={encoded}"
+
 async def get_mock_skin_offers(skin_name: str, is_stattrak: bool, quality: str) -> List[MarketOffer]:
-    """
-    Генерирует реалистичные mock-предложения по разным маркетам для скина.
-    Отсортированы по возрастанию цены (от дешевого к дорогому).
-    """
-    # Базовая псевдо-цена на основе названия для стабильности
     seed = sum(ord(c) for c in skin_name) + (1000 if is_stattrak else 0)
     rng = random.Random(seed)
     
-    base_price = rng.randint(500, 15000)
+    base_price = rng.randint(2500, 25000)
     
-    # Множитель качества
     quality_mult = {
         "FN": 1.6,
         "MW": 1.25,
@@ -47,36 +56,30 @@ async def get_mock_skin_offers(skin_name: str, is_stattrak: bool, quality: str) 
     }.get(quality, 1.0)
     
     if is_stattrak:
-        base_price *= 1.4
+        base_price *= 1.35
 
     base_price *= quality_mult
 
     offers = []
-    market_names = [m["name"] for m in MARKETS]
-    
-    for market in market_names:
-        fluctuation = rng.uniform(-0.15, 0.20)
+    for m in MARKETS:
+        fluctuation = rng.uniform(-0.10, 0.18)
         price = round(base_price * (1.0 + fluctuation), 2)
-        discount = round(rng.uniform(0, 18), 0) if rng.random() > 0.4 else 0.0
-        trade_lock = rng.choice([0, 1, 2, 3, 5, 7, 8])
-        url = f"https://example.com/market/{market.lower().replace(' ', '_').replace('.', '_')}?item={skin_name}"
+        discount = round(rng.uniform(0, 15), 0) if rng.random() > 0.5 else 0.0
+        trade_lock = rng.choice([0, 1, 2, 3, 5, 7])
+        url = get_real_market_url(m["id"], skin_name)
 
         offers.append(MarketOffer(
-            market_name=market,
+            market_name=m["name"],
             price=price,
             discount_percent=discount,
             trade_lock_days=trade_lock,
             item_url=url
         ))
 
-    # Сортировка от самого дешевого к самому дорогому
     offers.sort(key=lambda x: x.price)
     return offers
 
 async def get_mock_comparison(skin_name: str, is_stattrak: bool, quality: str, donor_id: str, recipient_id: str):
-    """
-    Возвращает цены на доноре и реципиенте для сравнения.
-    """
     donor_meta = next((m for m in MARKETS if m["id"] == donor_id), MARKETS[0])
     recipient_meta = next((m for m in MARKETS if m["id"] == recipient_id), MARKETS[1])
     

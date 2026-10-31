@@ -10,7 +10,8 @@ from bot.database.db import (
     get_total_prices_count,
     search_market_items
 )
-from bot.services.mock_data import MarketOffer, MARKETS, QUALITIES
+from bot.services.mock_data import MarketOffer, MARKETS, QUALITIES, get_real_market_url
+from bot.services.translator import translate_skin_input
 
 logger = logging.getLogger("market_service")
 
@@ -24,36 +25,29 @@ QUALITY_FULL_NAMES = {
     "BS": "Battle-Scarred"
 }
 
-def format_market_hash_name(skin_name: str, is_stattrak: bool, quality: str) -> str:
+def format_market_hash_name(skin_name: str, is_stattrak: bool, quality: str) -> Tuple[str, bool]:
     """
     Формирует точный market_hash_name для поиска в CS2/Steam:
-    Например: "StatTrak™ AK-47 | Redline (Field-Tested)"
+    Например: "★ M9 Bayonet | Bright Water (Field-Tested)"
+    или "StatTrak™ AK-47 | Redline (Field-Tested)"
     """
-    clean_name = skin_name.strip()
+    translated_name, is_knife = translate_skin_input(skin_name)
+    clean_name = translated_name.strip()
     
-    # Убираем дублирование качества, если пользователь сам написал его в названии
     for q_full in QUALITY_FULL_NAMES.values():
         if f"({q_full})" in clean_name:
             clean_name = clean_name.replace(f"({q_full})", "").strip()
-            
-    st_prefix = "StatTrak™ " if is_stattrak and not clean_name.startswith("StatTrak™") else ""
+
+    knife_prefix = "★ " if is_knife and not clean_name.startswith("★") else ""
+    st_prefix = "StatTrak™ " if is_stattrak and "stattrak" not in clean_name.lower() else ""
     q_suffix = f" ({QUALITY_FULL_NAMES.get(quality, quality)})" if quality else ""
 
-    return f"{st_prefix}{clean_name}{q_suffix}"
+    if is_knife:
+        full_hash = f"{knife_prefix}{st_prefix}{clean_name}{q_suffix}"
+    else:
+        full_hash = f"{st_prefix}{clean_name}{q_suffix}"
 
-def get_market_url(market_id: str, hash_name: str) -> str:
-    encoded_name = quote(hash_name)
-    if market_id == "market_csgo":
-        return f"https://market.csgo.com/ru/?search={encoded_name}"
-    elif market_id == "lis_skins":
-        return f"https://lis-skins.ru/market/csgo/?query={encoded_name}"
-    elif market_id == "csmoney":
-        return f"https://cs.money/csgo/trade/?search={encoded_name}"
-    elif market_id == "steam":
-        return f"https://steamcommunity.com/market/listings/730/{encoded_name}"
-    elif market_id == "buff163":
-        return f"https://buff.163.com/market/csgo#tab=selling&page_num=1&search={encoded_name}"
-    return f"https://market.csgo.com/ru/?search={encoded_name}"
+    return full_hash.strip(), is_knife
 
 async def update_market_csgo_prices() -> int:
     """
@@ -79,7 +73,6 @@ async def update_market_csgo_prices() -> int:
             items_raw = data.get("items", [])
             logger.info(f"Получено {len(items_raw)} предметов от Market.CSGO. Сохранение в БД...")
             
-            # Подготовка кортежей для пакетной вставки
             parsed_items = []
             for item in items_raw:
                 name = item.get("market_hash_name")
@@ -93,7 +86,6 @@ async def update_market_csgo_prices() -> int:
                     except ValueError:
                         continue
             
-            # Сохраняем пачками по 5000 для оптимизации
             chunk_size = 5000
             for i in range(0, len(parsed_items), chunk_size):
                 chunk = parsed_items[i:i + chunk_size]
@@ -106,12 +98,12 @@ async def update_market_csgo_prices() -> int:
 async def get_live_skin_offers(skin_name: str, is_stattrak: bool, quality: str) -> List[MarketOffer]:
     """
     Получает предложения по скину:
-    - Из базы достается реальная цена Market.CSGO.
-    - Для остальных площадок формируются сопоставимые котировки и прямые рабочие ссылки.
+    - Из базы достается реальная цена Market.CSGO (с переводом RU->EN и поддержкой ножей ★).
+    - Для остальных площадок формируются сопоставимые котировки и настоящие рабочие ссылки.
     """
-    hash_name = format_market_hash_name(skin_name, is_stattrak, quality)
+    hash_name, is_knife = format_market_hash_name(skin_name, is_stattrak, quality)
     
-    # 1. Поиск в SQLite по точному названию
+    # 1. Поиск в SQLite по точному market_hash_name
     cached = await find_market_item(hash_name)
     base_price = None
 
@@ -121,67 +113,84 @@ async def get_live_skin_offers(skin_name: str, is_stattrak: bool, quality: str) 
                 base_price = float(row["price"])
                 break
 
-    # 2. Если точное совпадение не найдено, пробуем нечеткий поиск
+    # 2. Если точное совпадение не найдено, пробуем варианты без/с звездочкой
     if not base_price:
-        fuzzy_matches = await search_market_items(skin_name, limit=5)
+        alt_name = hash_name.replace("★ ", "") if "★ " in hash_name else f"★ {hash_name}"
+        cached_alt = await find_market_item(alt_name)
+        if cached_alt:
+            base_price = float(cached_alt[0]["price"])
+            hash_name = alt_name
+
+    # 3. Нечеткий поиск по частям названия (например 'Bright Water' и 'M9')
+    if not base_price:
+        translated_base, _ = translate_skin_input(skin_name)
+        parts = [p.strip() for p in translated_base.split("|")]
+        search_query = parts[0]
+        fuzzy_matches = await search_market_items(search_query, limit=20)
+        q_full = QUALITY_FULL_NAMES.get(quality, "").lower()
+
         for candidate in fuzzy_matches:
             c_lower = candidate.lower()
-            q_full = QUALITY_FULL_NAMES.get(quality, "").lower()
             if q_full in c_lower:
-                if (is_stattrak and "stattrak" in c_lower) or (not is_stattrak and "stattrak" not in c_lower):
-                    candidate_rows = await find_market_item(candidate)
-                    if candidate_rows:
-                        base_price = float(candidate_rows[0]["price"])
-                        hash_name = candidate
-                        break
+                if len(parts) > 1 and parts[1].lower() not in c_lower:
+                    continue
+                if is_stattrak and "stattrak" not in c_lower:
+                    continue
+                if not is_stattrak and "stattrak" in c_lower:
+                    continue
+                candidate_rows = await find_market_item(candidate)
+                if candidate_rows:
+                    base_price = float(candidate_rows[0]["price"])
+                    hash_name = candidate
+                    break
 
-    # Если скин вообще новый или отсутствует в базе, делаем резервную оценку
+    # Если скин вообще не найден нигде, используем резервный генератор
     if not base_price:
         from bot.services.mock_data import get_mock_skin_offers
         return await get_mock_skin_offers(skin_name, is_stattrak, quality)
 
     offers: List[MarketOffer] = []
 
-    # Market.CSGO (Реальная цена из API)
+    # Market.CSGO (Реальная живая цена из API)
     offers.append(MarketOffer(
         market_name="Market.CSGO (cstm)",
         price=round(base_price, 2),
         discount_percent=0.0,
         trade_lock_days=0,
-        item_url=get_market_url("market_csgo", hash_name)
+        item_url=get_real_market_url("market_csgo", hash_name)
     ))
 
-    # Lis-Skins (соотношение цен с учетом комиссии мгновенной продажи/покупки)
-    lis_price = round(base_price * 1.04, 2)
+    # Lis-Skins (реалистичное соотношение мгновенной покупки)
+    lis_price = round(base_price * 1.035, 2)
     offers.append(MarketOffer(
         market_name="Lis-Skins",
         price=lis_price,
-        discount_percent=5.0,
+        discount_percent=6.0,
         trade_lock_days=0,
-        item_url=get_market_url("lis_skins", hash_name)
+        item_url=get_real_market_url("lis_skins", hash_name)
     ))
 
-    # CS.Money (обычно выше на 10-15% с учетом их системы бонусов)
-    csmoney_price = round(base_price * 1.12, 2)
+    # CS.Money
+    csmoney_price = round(base_price * 1.11, 2)
     offers.append(MarketOffer(
         market_name="CS.Money",
         price=csmoney_price,
-        discount_percent=12.0,
+        discount_percent=10.0,
         trade_lock_days=3,
-        item_url=get_market_url("csmoney", hash_name)
+        item_url=get_real_market_url("csmoney", hash_name)
     ))
 
-    # Steam Community (цена в Steam обычно на 20-25% выше рынка реальных денег)
-    steam_price = round(base_price * 1.25, 2)
+    # Steam Community Market
+    steam_price = round(base_price * 1.24, 2)
     offers.append(MarketOffer(
         market_name="Steam Community",
         price=steam_price,
         discount_percent=0.0,
         trade_lock_days=7,
-        item_url=get_market_url("steam", hash_name)
+        item_url=get_real_market_url("steam", hash_name)
     ))
 
-    # Сортировка от дешевого к дорогому
+    # Сортировка по возрастанию цены
     offers.sort(key=lambda x: x.price)
     return offers
 
