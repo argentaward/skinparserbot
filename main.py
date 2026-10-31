@@ -12,7 +12,7 @@ from aiogram.enums import ParseMode
 from config import settings
 from bot.database.db import init_db, get_total_prices_count
 from bot.handlers import common, search, compare, profile
-from bot.services.market_service import update_market_csgo_prices
+from bot.services.market_service import update_all_market_prices
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,15 +42,14 @@ def _sanitize_token(raw_token: str) -> str:
 
 async def background_prices_updater():
     """
-    Фоновый цикл обновления прайс-листов каждые 10 минут
+    Фоновый цикл обновления котировок маркетов (Market.CSGO и Skinport) каждые 10 минут
     """
     while True:
         try:
-            logger.info("Фоновое обновление котировок маркетов...")
-            await update_market_csgo_prices()
+            logger.info("Фоновое обновление котировок всех маркетов...")
+            await update_all_market_prices()
         except Exception as e:
             logger.error(f"Ошибка при фоновом обновлении котировок: {e}")
-        # Ждем 10 минут перед следующим обновлением
         await asyncio.sleep(600)
 
 async def main():
@@ -58,9 +57,9 @@ async def main():
     await init_db()
     logger.info("База данных готова.")
 
-    # Проверка наличия закэшированных цен
-    cached_count = await get_total_prices_count("Market.CSGO")
-    logger.info(f"В локальной базе сохранено котировок: {cached_count}")
+    cstm_count = await get_total_prices_count("Market.CSGO")
+    skinport_count = await get_total_prices_count("Skinport")
+    logger.info(f"В локальной базе котировок: Market.CSGO={cstm_count}, Skinport={skinport_count}")
 
     token = _sanitize_token(settings.BOT_TOKEN)
 
@@ -94,7 +93,7 @@ async def main():
     dp.include_router(compare.router)
     dp.include_router(profile.router)
 
-    # Запуск фонового сборщика цен
+    # Запуск фонового обновления цен
     asyncio.create_task(background_prices_updater())
 
     logger.info("Запуск бота в режиме Polling...")

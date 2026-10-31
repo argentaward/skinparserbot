@@ -13,9 +13,9 @@ class MarketOffer:
 
 MARKETS = [
     {"id": "market_csgo", "name": "Market.CSGO (cstm)", "sale_fee": 5.0, "withdraw_fee": 3.0, "deposit_fee": 0.0},
+    {"id": "skinport", "name": "Skinport", "sale_fee": 12.0, "withdraw_fee": 0.0, "deposit_fee": 0.0},
     {"id": "lis_skins", "name": "Lis-Skins", "sale_fee": 7.0, "withdraw_fee": 2.5, "deposit_fee": 0.0},
     {"id": "csmoney", "name": "CS.Money", "sale_fee": 7.0, "withdraw_fee": 0.0, "deposit_fee": 0.0},
-    {"id": "buff163", "name": "Buff163", "sale_fee": 2.5, "withdraw_fee": 1.0, "deposit_fee": 1.5},
     {"id": "steam", "name": "Steam Community", "sale_fee": 13.04, "withdraw_fee": 0.0, "deposit_fee": 0.0},
 ]
 
@@ -31,14 +31,14 @@ def get_real_market_url(market_id: str, query: str) -> str:
     encoded = quote(query)
     if "market_csgo" in market_id:
         return f"https://market.csgo.com/ru/?search={encoded}"
+    elif "skinport" in market_id:
+        return f"https://skinport.com/ru/market?search={encoded}"
     elif "lis_skins" in market_id:
         return f"https://lis-skins.ru/market/csgo/?query={encoded}"
     elif "csmoney" in market_id:
         return f"https://cs.money/csgo/trade/?search={encoded}"
     elif "steam" in market_id:
         return f"https://steamcommunity.com/market/search?appid=730&q={encoded}"
-    elif "buff163" in market_id:
-        return f"https://buff.163.com/market/csgo#tab=selling&page_num=1&search={encoded}"
     return f"https://market.csgo.com/ru/?search={encoded}"
 
 async def get_mock_skin_offers(skin_name: str, is_stattrak: bool, quality: str) -> List[MarketOffer]:
