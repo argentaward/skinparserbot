@@ -371,7 +371,27 @@ async def get_live_skin_offers(skin_name: str, is_stattrak: bool, quality: str) 
         item_url=get_real_market_url("lootfarm", hash_name)
     ))
 
-    # 5. Lis-Skins
+    # 5. CS.MONEY
+    cs_p = prices_by_market.get("CS.MONEY", round(base_price * 1.05, 2))
+    offers.append(MarketOffer(
+        market_name="CS.MONEY",
+        price=round(cs_p, 2),
+        discount_percent=35.0,
+        trade_lock_days=0,
+        item_url=get_real_market_url("csmoney", hash_name)
+    ))
+
+    # 6. Buff.market
+    buff_p = prices_by_market.get("Buff.market", round(base_price * 0.95, 2))
+    offers.append(MarketOffer(
+        market_name="Buff.market",
+        price=round(buff_p, 2),
+        discount_percent=0.0,
+        trade_lock_days=0,
+        item_url=get_real_market_url("buff_market", hash_name)
+    ))
+
+    # 7. Lis-Skins
     lis_p = round(base_price * 0.94, 2)
     offers.append(MarketOffer(
         market_name="Lis-Skins",
