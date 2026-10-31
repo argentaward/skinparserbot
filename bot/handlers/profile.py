@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
 from bot.states import ProfileStates
@@ -319,12 +319,16 @@ async def save_with_fee(message: Message, state: FSMContext):
 async def show_deals_history(callback: CallbackQuery):
     deals = await get_user_deals(callback.from_user.id, limit=10)
 
+    back_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Назад в профиль", callback_data="menu_profile")]
+    ])
+
     if not deals:
         await callback.message.edit_text(
             "📜 <b>Журнал сделок пуст</b>\n\n"
             "Вы еще не записали ни одного торгового круга. Проведите сравнение в меню «Сравнение 2 маркетов» и нажмите «Круг проведен».",
             parse_mode="HTML",
-            reply_markup=get_profile_kb()
+            reply_markup=back_kb
         )
         await callback.answer()
         return
@@ -343,6 +347,6 @@ async def show_deals_history(callback: CallbackQuery):
     await callback.message.edit_text(
         text="\n".join(lines),
         parse_mode="HTML",
-        reply_markup=get_profile_kb()
+        reply_markup=back_kb
     )
     await callback.answer()
