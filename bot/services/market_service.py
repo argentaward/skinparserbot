@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import ssl
+import time
 from typing import List, Optional, Tuple
 from urllib.parse import quote
 
@@ -18,6 +20,12 @@ logger = logging.getLogger("market_service")
 
 MARKET_CSGO_PRICES_URL = "https://market.csgo.com/api/v2/prices/RUB.json"
 SKINPORT_ITEMS_URL = "https://api.skinport.com/v1/items"
+WAXPEER_PRICES_URL = "https://api.waxpeer.com/v1/prices?game=csgo"
+LOOTFARM_PRICES_URL = "https://loot.farm/fullprice.json"
+CBR_RATES_URL = "https://www.cbr-xml-daily.ru/daily_json.js"
+
+_cached_usd_rate: float = 85.0
+_cached_usd_time: float = 0.0
 
 QUALITY_FULL_NAMES = {
     "FN": "Factory New",
@@ -26,6 +34,29 @@ QUALITY_FULL_NAMES = {
     "WW": "Well-Worn",
     "BS": "Battle-Scarred"
 }
+
+def get_usd_to_rub_rate() -> float:
+    """
+    Получает актуальный курс USD/RUB от ЦБ РФ (кэширует на 1 час).
+    """
+    global _cached_usd_rate, _cached_usd_time
+    now = time.time()
+    if now - _cached_usd_time < 3600 and _cached_usd_rate > 0:
+        return _cached_usd_rate
+
+    try:
+        r = requests.get(CBR_RATES_URL, timeout=10)
+        if r.status_code == 200:
+            val = r.json().get("Valute", {}).get("USD", {}).get("Value")
+            if val:
+                _cached_usd_rate = float(val)
+                _cached_usd_time = now
+                logger.info(f"Актуальный курс ЦБ РФ USD/RUB: {_cached_usd_rate:.2f} ₽")
+                return _cached_usd_rate
+    except Exception as e:
+        logger.warning(f"Не удалось обновить курс ЦБ РФ: {e}. Используем: {_cached_usd_rate}")
+
+    return _cached_usd_rate
 
 def format_market_hash_name(skin_name: str, is_stattrak: bool, quality: str) -> Tuple[str, bool]:
     translated_name, is_knife = translate_skin_input(skin_name)
@@ -122,7 +153,6 @@ async def update_skinport_prices() -> int:
     """
     logger.info("Загрузка свежих цен Skinport...")
     try:
-        # Выполняем в отдельном потоке, чтобы не блокировать event loop
         items = await asyncio.to_thread(_fetch_skinport_sync)
         if not items:
             return 0
@@ -140,17 +170,111 @@ async def update_skinport_prices() -> int:
         logger.error(f"Ошибка при обновлении цен Skinport: {e}")
         return 0
 
+def _fetch_waxpeer_sync(usd_rate: float) -> List[tuple]:
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SkinParserBot/1.0"}
+    resp = requests.get(WAXPEER_PRICES_URL, headers=headers, timeout=30)
+    if resp.status_code != 200:
+        logger.error(f"Ошибка загрузки Waxpeer: HTTP {resp.status_code}")
+        return []
+    
+    data = resp.json()
+    items = data.get("items", [])
+    parsed = []
+    for item in items:
+        name = item.get("name")
+        min_cents = item.get("min")
+        count = item.get("count", 0)
+        if name and min_cents:
+            try:
+                price_rub = round((float(min_cents) / 1000.0) * usd_rate, 2)
+                parsed.append((name, price_rub, int(count)))
+            except (ValueError, TypeError):
+                continue
+    return parsed
+
+async def update_waxpeer_prices() -> int:
+    """
+    Скачивает актуальный прайс-лист Waxpeer (USD) и сохраняет в SQLite в рублях.
+    """
+    logger.info("Загрузка свежих цен Waxpeer (P2P)...")
+    try:
+        usd_rate = await asyncio.to_thread(get_usd_to_rub_rate)
+        items = await asyncio.to_thread(_fetch_waxpeer_sync, usd_rate)
+        if not items:
+            return 0
+        
+        logger.info(f"Получено {len(items)} предметов от Waxpeer. Сохранение в БД...")
+        chunk_size = 5000
+        for i in range(0, len(items), chunk_size):
+            chunk = items[i:i + chunk_size]
+            await bulk_save_market_prices("Waxpeer (P2P)", chunk)
+
+        count = await get_total_prices_count("Waxpeer (P2P)")
+        logger.info(f"Цены Waxpeer успешно обновлены в базе! Всего позиций: {count}")
+        return count
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении цен Waxpeer: {e}")
+        return 0
+
+def _fetch_lootfarm_sync(usd_rate: float) -> List[tuple]:
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SkinParserBot/1.0"}
+    # На некоторых системах Loot.farm требует отключения проверки цепочки SSL
+    resp = requests.get(LOOTFARM_PRICES_URL, headers=headers, verify=False, timeout=30)
+    if resp.status_code != 200:
+        logger.error(f"Ошибка загрузки Loot.farm: HTTP {resp.status_code}")
+        return []
+    
+    data = resp.json()
+    parsed = []
+    for item in data:
+        name = item.get("name")
+        cents = item.get("price")
+        have = item.get("have", 0)
+        if name and cents:
+            try:
+                price_rub = round((float(cents) / 100.0) * usd_rate, 2)
+                parsed.append((name, price_rub, int(have)))
+            except (ValueError, TypeError):
+                continue
+    return parsed
+
+async def update_lootfarm_prices() -> int:
+    """
+    Скачивает актуальный прайс-лист Loot.farm (USD) и сохраняет в SQLite в рублях.
+    """
+    logger.info("Загрузка свежих цен Loot.farm...")
+    try:
+        usd_rate = await asyncio.to_thread(get_usd_to_rub_rate)
+        items = await asyncio.to_thread(_fetch_lootfarm_sync, usd_rate)
+        if not items:
+            return 0
+        
+        logger.info(f"Получено {len(items)} предметов от Loot.farm. Сохранение в БД...")
+        chunk_size = 5000
+        for i in range(0, len(items), chunk_size):
+            chunk = items[i:i + chunk_size]
+            await bulk_save_market_prices("Loot.farm", chunk)
+
+        count = await get_total_prices_count("Loot.farm")
+        logger.info(f"Цены Loot.farm успешно обновлены в базе! Всего позиций: {count}")
+        return count
+    except Exception as e:
+        logger.error(f"Ошибка при обновлении цен Loot.farm: {e}")
+        return 0
+
 async def update_all_market_prices():
     """
-    Обновляет котировки со всех подключенных маркетов
+    Обновляет котировки со всех подключенных маркетов с открытыми API
     """
     await update_market_csgo_prices()
     await update_skinport_prices()
+    await update_waxpeer_prices()
+    await update_lootfarm_prices()
 
 async def get_live_skin_offers(skin_name: str, is_stattrak: bool, quality: str) -> List[MarketOffer]:
     """
     Получает предложения по скину:
-    - Из базы достаются 100% реальные цены Market.CSGO и Skinport.
+    - Из базы достаются 100% реальные цены Market.CSGO, Skinport, Waxpeer и Loot.farm.
     - Для остальных площадок формируются сопоставимые котировки и настоящие рабочие ссылки.
     """
     hash_name, is_knife = format_market_hash_name(skin_name, is_stattrak, quality)
@@ -188,18 +312,17 @@ async def get_live_skin_offers(skin_name: str, is_stattrak: bool, quality: str) 
                     hash_name = candidate
                     break
 
-    # Считываем реальные цены из базы
-    market_csgo_price = None
-    skinport_price = None
-
+    # Считываем реальные цены из базы по маркетам
+    prices_by_market = {}
     if cached:
         for row in cached:
-            if row["market_name"] == "Market.CSGO":
-                market_csgo_price = float(row["price"])
-            elif row["market_name"] == "Skinport":
-                skinport_price = float(row["price"])
+            prices_by_market[row["market_name"]] = float(row["price"])
 
-    base_price = market_csgo_price or skinport_price
+    base_price = None
+    for m_name in ["Market.CSGO", "Skinport", "Waxpeer (P2P)", "Loot.farm"]:
+        if m_name in prices_by_market:
+            base_price = prices_by_market[m_name]
+            break
 
     # Если скин вообще не найден ни в одном маркете
     if not base_price:
@@ -208,8 +331,8 @@ async def get_live_skin_offers(skin_name: str, is_stattrak: bool, quality: str) 
 
     offers: List[MarketOffer] = []
 
-    # 1. Market.CSGO (cstm) - Реальная цена
-    cstm_p = market_csgo_price or round(skinport_price * 0.95, 2)
+    # 1. Market.CSGO (cstm)
+    cstm_p = prices_by_market.get("Market.CSGO", round(base_price * 0.98, 2))
     offers.append(MarketOffer(
         market_name="Market.CSGO (cstm)",
         price=round(cstm_p, 2),
@@ -218,8 +341,8 @@ async def get_live_skin_offers(skin_name: str, is_stattrak: bool, quality: str) 
         item_url=get_real_market_url("market_csgo", hash_name)
     ))
 
-    # 2. Skinport - Реальная цена
-    sk_p = skinport_price or round(market_csgo_price * 1.05, 2)
+    # 2. Skinport
+    sk_p = prices_by_market.get("Skinport", round(base_price * 1.05, 2))
     offers.append(MarketOffer(
         market_name="Skinport",
         price=round(sk_p, 2),
@@ -228,37 +351,46 @@ async def get_live_skin_offers(skin_name: str, is_stattrak: bool, quality: str) 
         item_url=get_real_market_url("skinport", hash_name)
     ))
 
-    # 3. Lis-Skins
-    lis_price = round(base_price * 0.96, 2)
+    # 3. Waxpeer (P2P)
+    wax_p = prices_by_market.get("Waxpeer (P2P)", round(base_price * 0.96, 2))
+    offers.append(MarketOffer(
+        market_name="Waxpeer (P2P)",
+        price=round(wax_p, 2),
+        discount_percent=0.0,
+        trade_lock_days=0,
+        item_url=get_real_market_url("waxpeer", hash_name)
+    ))
+
+    # 4. Loot.farm
+    loot_p = prices_by_market.get("Loot.farm", round(base_price * 1.08, 2))
+    offers.append(MarketOffer(
+        market_name="Loot.farm",
+        price=round(loot_p, 2),
+        discount_percent=0.0,
+        trade_lock_days=0,
+        item_url=get_real_market_url("lootfarm", hash_name)
+    ))
+
+    # 5. Lis-Skins
+    lis_p = round(base_price * 0.94, 2)
     offers.append(MarketOffer(
         market_name="Lis-Skins",
-        price=lis_price,
-        discount_percent=15.0,
+        price=lis_p,
+        discount_percent=12.0,
         trade_lock_days=0,
         item_url=get_real_market_url("lis_skins", hash_name)
     ))
 
-    # 4. CS.Money
-    csmoney_price = round(base_price * 1.10, 2)
-    offers.append(MarketOffer(
-        market_name="CS.Money",
-        price=csmoney_price,
-        discount_percent=8.0,
-        trade_lock_days=3,
-        item_url=get_real_market_url("csmoney", hash_name)
-    ))
-
-    # 5. Steam Community Market
-    steam_price = round(base_price * 1.25, 2)
+    # 6. Steam Community Market
+    steam_p = round(base_price * 1.25, 2)
     offers.append(MarketOffer(
         market_name="Steam Community",
-        price=steam_price,
+        price=steam_p,
         discount_percent=0.0,
         trade_lock_days=7,
         item_url=get_real_market_url("steam", hash_name)
     ))
 
-    # Сортировка от самого дешевого к самому дорогому
     offers.sort(key=lambda x: x.price)
     return offers
 

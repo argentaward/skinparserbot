@@ -42,7 +42,7 @@ def _sanitize_token(raw_token: str) -> str:
 
 async def background_prices_updater():
     """
-    Фоновый цикл обновления котировок маркетов (Market.CSGO и Skinport) каждые 10 минут
+    Фоновый цикл обновления котировок маркетов (Market.CSGO, Skinport, Waxpeer, Loot.farm) каждые 10 минут
     """
     while True:
         try:
@@ -59,7 +59,12 @@ async def main():
 
     cstm_count = await get_total_prices_count("Market.CSGO")
     skinport_count = await get_total_prices_count("Skinport")
-    logger.info(f"В локальной базе котировок: Market.CSGO={cstm_count}, Skinport={skinport_count}")
+    waxpeer_count = await get_total_prices_count("Waxpeer (P2P)")
+    lootfarm_count = await get_total_prices_count("Loot.farm")
+    logger.info(
+        f"В локальной базе котировок: Market.CSGO={cstm_count}, "
+        f"Skinport={skinport_count}, Waxpeer={waxpeer_count}, Loot.farm={lootfarm_count}"
+    )
 
     token = _sanitize_token(settings.BOT_TOKEN)
 

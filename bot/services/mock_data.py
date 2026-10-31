@@ -14,8 +14,9 @@ class MarketOffer:
 MARKETS = [
     {"id": "market_csgo", "name": "Market.CSGO (cstm)", "sale_fee": 5.0, "withdraw_fee": 3.0, "deposit_fee": 0.0},
     {"id": "skinport", "name": "Skinport", "sale_fee": 12.0, "withdraw_fee": 0.0, "deposit_fee": 0.0},
+    {"id": "waxpeer", "name": "Waxpeer (P2P)", "sale_fee": 6.0, "withdraw_fee": 0.0, "deposit_fee": 0.0},
+    {"id": "lootfarm", "name": "Loot.farm", "sale_fee": 3.0, "withdraw_fee": 0.0, "deposit_fee": 0.0},
     {"id": "lis_skins", "name": "Lis-Skins", "sale_fee": 7.0, "withdraw_fee": 2.5, "deposit_fee": 0.0},
-    {"id": "csmoney", "name": "CS.Money", "sale_fee": 7.0, "withdraw_fee": 0.0, "deposit_fee": 0.0},
     {"id": "steam", "name": "Steam Community", "sale_fee": 13.04, "withdraw_fee": 0.0, "deposit_fee": 0.0},
 ]
 
@@ -33,10 +34,12 @@ def get_real_market_url(market_id: str, query: str) -> str:
         return f"https://market.csgo.com/ru/?search={encoded}"
     elif "skinport" in market_id:
         return f"https://skinport.com/ru/market?search={encoded}"
+    elif "waxpeer" in market_id:
+        return f"https://waxpeer.com/?game=csgo&search={encoded}"
+    elif "lootfarm" in market_id:
+        return f"https://loot.farm/"
     elif "lis_skins" in market_id:
         return f"https://lis-skins.ru/market/csgo/?query={encoded}"
-    elif "csmoney" in market_id:
-        return f"https://cs.money/csgo/trade/?search={encoded}"
     elif "steam" in market_id:
         return f"https://steamcommunity.com/market/search?appid=730&q={encoded}"
     return f"https://market.csgo.com/ru/?search={encoded}"
