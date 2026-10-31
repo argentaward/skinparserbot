@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT,
     deposit_fee REAL DEFAULT 0.0,
     sale_fee REAL DEFAULT 5.0,
-    withdraw_fee REAL DEFAULT 3.0,
+    withdraw_fee REAL DEFAULT 5.0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

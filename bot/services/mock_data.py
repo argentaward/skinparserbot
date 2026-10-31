@@ -12,7 +12,7 @@ class MarketOffer:
     item_url: str
 
 MARKETS = [
-    {"id": "market_csgo", "name": "Market.CSGO (cstm)", "sale_fee": 5.0, "withdraw_fee": 3.0, "deposit_fee": 0.0},
+    {"id": "market_csgo", "name": "Market.CSGO (cstm)", "sale_fee": 5.0, "withdraw_fee": 5.0, "deposit_fee": 0.0},
     {"id": "skinport", "name": "Skinport", "sale_fee": 12.0, "withdraw_fee": 0.0, "deposit_fee": 0.0},
     {"id": "waxpeer", "name": "Waxpeer (P2P)", "sale_fee": 6.0, "withdraw_fee": 0.0, "deposit_fee": 0.0},
     {"id": "lootfarm", "name": "Loot.farm", "sale_fee": 3.0, "withdraw_fee": 0.0, "deposit_fee": 0.0},
