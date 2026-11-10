@@ -41,12 +41,6 @@ CREATE INDEX IF NOT EXISTS idx_market_prices_hash ON market_prices(market_hash_n
 async def init_db():
     async with aiosqlite.connect(settings.DB_PATH) as db:
         await db.executescript(INIT_DB_SQL)
-        cursor = await db.execute("PRAGMA table_info(users)")
-        cols = [row[1] for row in await cursor.fetchall()]
-        if "cstm_api_key" not in cols:
-            await db.execute("ALTER TABLE users ADD COLUMN cstm_api_key TEXT")
-        if "lis_api_key" not in cols:
-            await db.execute("ALTER TABLE users ADD COLUMN lis_api_key TEXT")
         await db.commit()
 
 async def get_or_create_user(user_id: int, username: Optional[str] = None) -> Dict[str, Any]:
@@ -88,9 +82,9 @@ async def add_deal(
     sell_price: float,
     net_profit: float,
     roi: float
-):
+) -> int:
     async with aiosqlite.connect(settings.DB_PATH) as db:
-        await db.execute(
+        cursor = await db.execute(
             """
             INSERT INTO deals (
                 user_id, skin_name, donor_market, recipient_market,
@@ -101,6 +95,7 @@ async def add_deal(
             (user_id, skin_name, donor_market, recipient_market, buy_price, sell_price, net_profit, roi)
         )
         await db.commit()
+        return cursor.lastrowid
 
 async def get_user_deals(user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
     async with aiosqlite.connect(settings.DB_PATH) as db:
@@ -162,24 +157,3 @@ async def get_total_prices_count(market_name: str = "Market.CSGO") -> int:
         ) as cursor:
             row = await cursor.fetchone()
             return row[0] if row else 0
-
-async def set_user_api_key(user_id: int, market: str, api_key: Optional[str]):
-    from bot.services.crypto import encrypt_key
-    enc_key = encrypt_key(api_key) if api_key else None
-    col = "cstm_api_key" if market == "cstm" else "lis_api_key"
-    async with aiosqlite.connect(settings.DB_PATH) as db:
-        await db.execute(f"UPDATE users SET {col} = ? WHERE user_id = ?", (enc_key, user_id))
-        await db.commit()
-
-async def get_user_api_keys(user_id: int) -> Dict[str, Optional[str]]:
-    from bot.services.crypto import decrypt_key
-    async with aiosqlite.connect(settings.DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT cstm_api_key, lis_api_key FROM users WHERE user_id = ?", (user_id,)) as cursor:
-            row = await cursor.fetchone()
-            if not row:
-                return {"cstm": None, "lis": None}
-            return {
-                "cstm": decrypt_key(row["cstm_api_key"]),
-                "lis": decrypt_key(row["lis_api_key"])
-            }

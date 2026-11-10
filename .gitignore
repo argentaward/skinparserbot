@@ -1,7 +1,27 @@
+# Environment & Secrets
 .env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Databases & data
 *.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+
+# Python cache
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 .pytest_cache/
+
+# IDE & OS
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db
